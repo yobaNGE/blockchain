@@ -235,3 +235,5 @@ var mineBlock = (blockData) => {
 connectToPeers(initialPeers);
 initHttpServer();
 initP2PServer();
+//$env:HTTP_PORT=3001; $env:P2P_PORT=6001; npm start
+//$env:HTTP_PORT=3002; $env:P2P_PORT=6002; $env:PEERS="ws://192.168.0.110:6001"; npm start

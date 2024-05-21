@@ -6,14 +6,17 @@ var WebSocket = require("ws");
 var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
 var initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
+var difficulty = 4;
 
 class Block {
-    constructor(index, previousHash, timestamp, data, hash) {
+    constructor(index, previousHash, timestamp, data, hash, difficulty, nonce) {
         this.index = index;
         this.previousHash = previousHash.toString();
         this.timestamp = timestamp;
         this.data = data;
         this.hash = hash.toString();
+        this.difficulty = difficulty;
+        this.nonce = nonce;
     }
 }
 
@@ -25,7 +28,7 @@ var MessageType = {
 };
 var getGenesisBlock = () => {
     return new Block(0, "0", 1682839690, "RUT-MIIT first block",
-        "8d9d5a7ff4a78042ea6737bf59c772f8ed27ef3c9b576eac1976c91aaf48d2de");
+        "8d9d5a7ff4a78042ea6737bf59c772f8ed27ef3c9b576eac1976c91aaf48d2de", 0, 0);
 };
 var blockchain = [getGenesisBlock()];
 var initHttpServer = () => {
@@ -33,7 +36,8 @@ var initHttpServer = () => {
     app.use(bodyParser.json());
     app.get('/blocks', (req, res) => res.send(JSON.stringify(blockchain)));
     app.post('/mineBlock', (req, res) => {
-        var newBlock = generateNextBlock(req.body.data);
+        //var newBlock = generateNextBlock(req.body.data);
+        var newBlock = mineBlock(req.body.data);
         addBlock(newBlock);
         broadcast(responseLatestMsg());
         console.log('block added: ' + JSON.stringify(newBlock));
@@ -129,10 +133,11 @@ var generateNextBlock = (blockData) => {
 };
 var calculateHashForBlock = (block) => {
     return calculateHash(block.index, block.previousHash, block.timestamp,
-        block.data);
+        block.data, block.nonce);
 };
-var calculateHash = (index, previousHash, timestamp, data) => {
-    return CryptoJS.SHA256(index + previousHash + timestamp + data).toString();
+var calculateHash = (index, previousHash, timestamp, data, nonce) => {
+    return CryptoJS.SHA256(index + previousHash + timestamp + data +
+        nonce).toString();
 };
 var addBlock = (newBlock) => {
     if (isValidNewBlock(newBlock, getLatestBlock())) {
@@ -182,7 +187,7 @@ var isValidChain = (blockchainToValidate) => {
 var getLatestBlock = () => blockchain[blockchain.length - 1];
 var queryChainLengthMsg = () => ({'type': MessageType.QUERY_LATEST});
 var queryAllMsg = () => ({'type': MessageType.QUERY_ALL});
-var responseChainMsg = () =>({
+var responseChainMsg = () => ({
     'type': MessageType.RESPONSE_BLOCKCHAIN, 'data': JSON.stringify(blockchain)
 });
 var responseLatestMsg = () => ({
@@ -191,6 +196,58 @@ var responseLatestMsg = () => ({
 });
 var write = (ws, message) => ws.send(JSON.stringify(message));
 var broadcast = (message) => sockets.forEach(socket => write(socket, message));
+
+// var mineBlock = (blockData) => {
+//     var previousBlock = getLatestBlock();
+//     var nextIndex = previousBlock.index + 1;
+//     var nonce = 0;
+//     var nextTimestamp = new Date().getTime() / 1000;
+//     var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp,
+//         blockData, nonce);
+//     while (nextHash.substring(0, difficulty) !== Array(difficulty +
+//         1).join("0")) {
+//         nonce++;
+//         nextTimestamp = new Date().getTime() / 1000;
+//         nextHash = calculateHash(nextIndex, previousBlock.hash,
+//             nextTimestamp, blockData, nonce)
+//
+//         console.log("\"index\":" + nextIndex +
+//             ",\"previousHash\":" + previousBlock.hash +
+//             "\"timestamp\":" + nextTimestamp + ",\"data\":" + blockData +
+//             ",\x1b[33mhash: " + nextHash + " \x1b[0m," +
+//             "\"difficulty\":" + difficulty +
+//             " \x1b[33mnonce: " + nonce + " \x1b[0m ");
+//     }
+//
+//     return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData,
+//         nextHash, difficulty, nonce);
+// }
+var isPrime = (num) => {
+    if (num <= 1) return false;
+    if (num <= 3) return true;
+
+    if (num % 2 === 0 || num % 3 === 0) return false;
+
+    for (let i = 5; i * i <= num; i += 6) {
+        if (num % i === 0 || num % (i + 2) === 0) return false;
+    }
+    return true;
+};
+
+var mineBlock = (blockData) => {
+    var previousBlock = getLatestBlock();
+    var nextIndex = previousBlock.index + 1;
+    var nextTimestamp = new Date().getTime() / 1000;
+    var nonce = 0;
+    var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData, nonce);
+
+    while (!isPrime(parseInt(nextHash, 16))) {  // Условие: хеш должен быть простым числом
+        nonce++;
+        nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData, nonce);
+    }
+
+    return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, nonce);
+};
 connectToPeers(initialPeers);
 initHttpServer();
 initP2PServer();

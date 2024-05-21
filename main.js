@@ -6,7 +6,7 @@ var WebSocket = require("ws");
 var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
 var initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
-var difficulty = 4;
+var difficulty = 8;
 
 class Block {
     constructor(index, previousHash, timestamp, data, hash, difficulty, nonce) {
@@ -197,57 +197,41 @@ var responseLatestMsg = () => ({
 var write = (ws, message) => ws.send(JSON.stringify(message));
 var broadcast = (message) => sockets.forEach(socket => write(socket, message));
 
-// var mineBlock = (blockData) => {
-//     var previousBlock = getLatestBlock();
-//     var nextIndex = previousBlock.index + 1;
-//     var nonce = 0;
-//     var nextTimestamp = new Date().getTime() / 1000;
-//     var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp,
-//         blockData, nonce);
-//     while (nextHash.substring(0, difficulty) !== Array(difficulty +
-//         1).join("0")) {
-//         nonce++;
-//         nextTimestamp = new Date().getTime() / 1000;
-//         nextHash = calculateHash(nextIndex, previousBlock.hash,
-//             nextTimestamp, blockData, nonce)
-//
-//         console.log("\"index\":" + nextIndex +
-//             ",\"previousHash\":" + previousBlock.hash +
-//             "\"timestamp\":" + nextTimestamp + ",\"data\":" + blockData +
-//             ",\x1b[33mhash: " + nextHash + " \x1b[0m," +
-//             "\"difficulty\":" + difficulty +
-//             " \x1b[33mnonce: " + nonce + " \x1b[0m ");
-//     }
-//
-//     return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData,
-//         nextHash, difficulty, nonce);
-// }
-var isPrime = (num) => {
-    if (num <= 1) return false;
-    if (num <= 3) return true;
-
-    if (num % 2 === 0 || num % 3 === 0) return false;
-
-    for (let i = 5; i * i <= num; i += 6) {
-        if (num % i === 0 || num % (i + 2) === 0) return false;
+var isPalindrome = (str) => {
+    var len = str.length;
+    for (var i = 0; i < len / 2; i++) {
+        if (str[i] !== str[len - 1 - i]) {
+            return false;
+        }
     }
     return true;
 };
-
 var mineBlock = (blockData) => {
     var previousBlock = getLatestBlock();
     var nextIndex = previousBlock.index + 1;
-    var nextTimestamp = new Date().getTime() / 1000;
     var nonce = 0;
-    var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData, nonce);
-
-    while (!isPrime(parseInt(nextHash, 16))) {  // Условие: хеш должен быть простым числом
+    var nextTimestamp = new Date().getTime() / 1000;
+    var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp,
+        blockData, nonce);
+    console.log(nextHash)
+    while (!isPalindrome(nextHash.substring(0, difficulty))) {
         nonce++;
-        nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData, nonce);
+        nextTimestamp = new Date().getTime() / 1000;
+        nextHash = calculateHash(nextIndex, previousBlock.hash,
+            nextTimestamp, blockData, nonce)
+
+        console.log("\"index\":" + nextIndex +
+            ",\"previousHash\":" + previousBlock.hash +
+            "\"timestamp\":" + nextTimestamp + ",\"data\":" + blockData +
+            ",\x1b[33mhash: " + nextHash + " \x1b[0m," +
+            "\"difficulty\":" + difficulty +
+            " \x1b[33mnonce: " + nonce + " \x1b[0m ");
     }
 
-    return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, nonce);
-};
+    return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData,
+        nextHash, difficulty, nonce);
+}
+
 connectToPeers(initialPeers);
 initHttpServer();
 initP2PServer();
